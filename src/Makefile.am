@@ -1,15 +1,20 @@
 include $(top_srcdir)/common.am
 
-bin_PROGRAMS = modbus_server bacnet_client
+bin_PROGRAMS = modbus_server bacnet_client bacnet_server
 
 modbus_server_SOURCES = modbus_server.c
 modbus_server_CFLAGS = $(AM_CFLAGS) $(MODBUS_CFLAGS)
 modbus_server_LDADD = $(AM_LIBS) $(MODBUS_LIBS)
 
-BACNET_DEPENDENT_SRC = bacnet_client.c
-bacnet_client_SOURCES = $(BACNET_DEPENDENT_SRC)
+BACNET_DEPENDENT_SRC = bacnet_client.c bacnet_server.c
+
+bacnet_client_SOURCES = bacnet_client.c
 bacnet_client_CFLAGS = $(AM_CFLAGS) $(BACNET_CFLAGS)
 bacnet_client_LDADD = $(AM_LIBS) $(BACNET_LIBS)
+
+bacnet_server_SOURCES = bacnet_server.c
+bacnet_server_CFLAGS = $(AM_CFLAGS) $(BACNET_CFLAGS)
+bacnet_server_LDADD = $(AM_LIBS) $(BACNET_LIBS)
 
 BUILT_SOURCES = bacnet_namespace.h .bacnet_dependent_src_stamp
 
