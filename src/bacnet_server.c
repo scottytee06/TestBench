@@ -8,6 +8,7 @@
 #include <libbacnet/client.h>
 #include <libbacnet/txbuf.h>
 #include <libbacnet/tsm.h>
+#include <libbacnet/ai.h>
 #include "bacnet_namespace.h"
 
 #define BACNET_INSTANCE_NO	    120
@@ -30,23 +31,38 @@
 	}			\
     } while (0)
 
-static object_functions_t server_objects[] = {
+static bacnet_object_functions_t server_objects[] = {
     {bacnet_OBJECT_DEVICE,
 	    NULL,
-	    Device_Count,
-	    Device_Index_To_Instance,
-	    Device_Valid_Object_Instance_Number,
-	    Device_Object_Name,
-	    Device_Read_Property_Local,
-	    Device_Write_Property_Local,
-	    Device_Property_Lists,
-	    DeviceGetRRInfo,
+	    bacnet_Device_Count,
+	    bacnet_Device_Index_To_Instance,
+	    bacnet_Device_Valid_Object_Instance_Number,
+	    bacnet_Device_Object_Name,
+	    bacnet_Device_Read_Property_Local,
+	    bacnet_Device_Write_Property_Local,
+	    bacnet_Device_Property_Lists,
+	    bacnet_DeviceGetRRInfo,
 	    NULL, /* Iterator */
 	    NULL, /* Value_Lists */
 	    NULL, /* COV */
 	    NULL, /* COV Clear */
 	    NULL  /* Intrinsic Reporting */
     },
+    {bacnet_OBJECT_ANALOG_INPUT,
+            bacnet_Analog_Input_Init,
+            bacnet_Analog_Input_Count,
+            bacnet_Analog_Input_Index_To_Instance,
+            bacnet_Analog_Input_Valid_Instance,
+            bacnet_Analog_Input_Object_Name,
+            bacnet_Analog_Input_Read_Property,
+            bacnet_Analog_Input_Write_Property,
+            bacnet_Analog_Input_Property_Lists,
+            NULL /* ReadRangeInfo */ ,
+            NULL /* Iterator */ ,
+            bacnet_Analog_Input_Encode_Value_List,
+            bacnet_Analog_Input_Change_Of_Value,
+            bacnet_Analog_Input_Change_Of_Value_Clear,
+            bacnet_Analog_Input_Intrinsic_Reporting},
     {MAX_BACNET_OBJECT_TYPE}
 };
 
@@ -148,6 +164,8 @@ int main(int argc, char **argv) {
     register_with_bbmd();
 
     bacnet_Send_I_Am(&bacnet_Handler_Transmit_Buffer[0]);
+
+    bacnet_Analog_Input_Present_Value_Set(0, 1.26);
 
     while (1) {
 	pdu_len = bacnet_datalink_receive(

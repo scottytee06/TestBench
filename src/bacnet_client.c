@@ -12,10 +12,22 @@
 #include "bacnet_namespace.h"
 
 #define TARGET_DEVICE		    120
+#define GET_OBJECT_LIST		    0
+#define GET_AI			    1
+
+#if GET_OBJECT_LIST
 #define TARGET_OBJECT_TYPE	    bacnet_OBJECT_DEVICE
 #define TARGET_OBJECT_INSTANCE	    TARGET_DEVICE
 #define TARGET_OBJECT_PROPERTY	    bacnet_PROP_OBJECT_LIST
 #define TARGET_OBJECT_INDEX	    BACNET_ARRAY_ALL
+#endif
+
+#if GET_AI
+#define TARGET_OBJECT_TYPE	    bacnet_OBJECT_ANALOG_INPUT
+#define TARGET_OBJECT_INSTANCE	    0
+#define TARGET_OBJECT_PROPERTY	    bacnet_PROP_PRESENT_VALUE
+#define TARGET_OBJECT_INDEX	    BACNET_ARRAY_ALL
+#endif
 
 #define BACNET_PORT		    0xBAC1
 #define BACNET_INTERFACE	    "lo"
@@ -40,17 +52,17 @@ static bool error;
 static BACNET_ADDRESS target_address;
 static int request_invoke_id;
 
-static object_functions_t server_objects[] = {
+static bacnet_object_functions_t client_objects[] = {
     {bacnet_OBJECT_DEVICE,
 	    NULL,
-	    Device_Count,
-	    Device_Index_To_Instance,
-	    Device_Valid_Object_Instance_Number,
-	    Device_Object_Name,
-	    Device_Read_Property_Local,
-	    Device_Write_Property_Local,
-	    Device_Property_Lists,
-	    DeviceGetRRInfo,
+	    bacnet_Device_Count,
+	    bacnet_Device_Index_To_Instance,
+	    bacnet_Device_Valid_Object_Instance_Number,
+	    bacnet_Device_Object_Name,
+	    bacnet_Device_Read_Property_Local,
+	    bacnet_Device_Write_Property_Local,
+	    bacnet_Device_Property_Lists,
+	    bacnet_DeviceGetRRInfo,
 	    NULL, /* Iterator */
 	    NULL, /* Value_Lists */
 	    NULL, /* COV */
@@ -217,7 +229,7 @@ int main(int argc, char **argv) {
     bacnet_address_init();
 
     /* Setup device objects */
-    bacnet_Device_Init(server_objects);
+    bacnet_Device_Init(client_objects);
     BN_UNC(I_AM, i_am_bind);
     BN_CON_ACK(READ_PROPERTY, read_property_ack);
     BN_ERR(READ_PROPERTY, read_property_err);
