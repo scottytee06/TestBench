@@ -12,16 +12,18 @@
 #include "bacnet_namespace.h"
 
 #define BACNET_INSTANCE_NO	    120
-#define BACNET_PORT		    0xBAC0
+#define BACNET_PORT		    0xBAC1
 #define BACNET_INTERFACE	    "lo"
 #define BACNET_DATALINK_TYPE	    "bvlc"
 #define BACNET_SELECT_TIMEOUT_MS    1	    /* ms */
 
+#define RUN_AS_BBMD_CLIENT	    1
+
+#if RUN_AS_BBMD_CLIENT
 #define BACNET_BBMD_PORT	    0xBAC0
 #define BACNET_BBMD_ADDRESS	    "127.0.0.1"
 #define BACNET_BBMD_TTL		    90
-
-#define RUN_AS_BBMD_CLIENT	    0
+#endif
 
 #define INC_TIMER(reset, func)	\
     do {			\

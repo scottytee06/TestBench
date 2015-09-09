@@ -29,16 +29,18 @@
 #define TARGET_OBJECT_INDEX	    BACNET_ARRAY_ALL
 #endif
 
-#define BACNET_PORT		    0xBAC1
+#define BACNET_PORT		    0xBAC0
 #define BACNET_INTERFACE	    "lo"
 #define BACNET_DATALINK_TYPE	    "bvlc"
 #define BACNET_SELECT_TIMEOUT_MS    1	    /* ms */
 
-#define BACNET_BBMD_PORT	    0xBAC0
-#define BACNET_BBMD_ADDRESS	    "127.0.0.1"
-#define BACNET_BBMD_TTL		    90
+#define RUN_AS_BBMD_CLIENT	    0
 
-#define RUN_AS_BBMD_CLIENT	    1
+#if RUN_AS_BBMD_CLIENT
+#define BACNET_BBMD_PORT	    0xBAC0
+#define BACNET_BBMD_ADDRESS	    "downstairs"
+#define BACNET_BBMD_TTL		    90
+#endif
 
 #define INC_TIMER(reset, func)	\
     do {			\
@@ -48,7 +50,7 @@
 	}			\
     } while (0)
 
-static bool error;
+static bool found_server;
 static BACNET_ADDRESS target_address;
 static int request_invoke_id;
 
@@ -97,8 +99,8 @@ static void minute_tick(void) {
 static void second_tick(void) {
     static int timer = S_PER_MIN;
 
-    /* Bail out after 1 second */
-    error = true;
+    /* Keep searching for server */
+    if (!found_server) bacnet_Send_WhoIs(TARGET_DEVICE, TARGET_DEVICE);
 
     /* Invalidates stale BBMD foreign device table entries */
     bacnet_bvlc_maintenance_timer(1);
@@ -167,7 +169,7 @@ static void abort_handler(
 		    (invoke_id == request_invoke_id)) {
 	fprintf(stderr, "BACnet Abort: %s\n",
 	    bactext_abort_reason_name(abort_reason));
-	error = true;
+	found_server = 0;
     }
 }
 
@@ -179,7 +181,7 @@ static void reject_handler(
 		    (invoke_id == request_invoke_id)) {
 	fprintf(stderr, "BACnet Reject: %s\n",
 	    bactext_reject_reason_name(reject_reason));
-	error = true;
+	found_server = 0;
     }
 }
 
@@ -193,7 +195,7 @@ static void read_property_err(
 	fprintf(stderr, "BACnet Error: %s: %s\n",
 	    bactext_error_class_name(error_class),
 	    bactext_error_code_name(error_code));
-	error = true;
+	found_server = 0;
     }
 }
 
@@ -218,12 +220,41 @@ static void read_property_ack(
     }
 }
 
+void *read_prop_thread(void *arg) {
+    while (1) {
+
+	sleep(1);
+
+	if (!found_server) continue;
+	    
+	if (!request_invoke_id)
+	    request_invoke_id = bacnet_Send_Read_Property_Request(
+				    TARGET_DEVICE,
+				    TARGET_OBJECT_TYPE,
+				    TARGET_OBJECT_INSTANCE,
+				    TARGET_OBJECT_PROPERTY,
+				    TARGET_OBJECT_INDEX);
+
+	else if (bacnet_tsm_invoke_id_free(request_invoke_id)) {
+	    /* Transaction is finished */
+	    request_invoke_id = 0;
+	} else if (bacnet_tsm_invoke_id_failed(request_invoke_id)) {
+	    fprintf(stderr, "Error: TSM Timeout\n");
+	    bacnet_tsm_free_invoke_id(request_invoke_id);
+	    request_invoke_id = 0;
+	    found_server = 0;
+	}
+    }
+
+    return arg;
+}
+
 int main(int argc, char **argv) {
     uint8_t rx_buf[bacnet_MAX_MPDU];
     uint16_t pdu_len;
     BACNET_ADDRESS src;
-    bool found = false;
     unsigned max_apdu;
+    pthread_t read_prop_thread_id;
 
     bacnet_Device_Set_Object_Instance_Number(BACNET_MAX_INSTANCE);
     bacnet_address_init();
@@ -244,31 +275,12 @@ int main(int argc, char **argv) {
     memset(&src, 0, sizeof(src));
 
     register_with_bbmd();
-    
-    bacnet_Send_WhoIs(TARGET_DEVICE, TARGET_DEVICE);
-		
-    while (!error) {
-	if (!found) found = bacnet_address_bind_request(
-			TARGET_DEVICE, &max_apdu, &target_address);
 
-	if (found) {
-	    if (!request_invoke_id)
-		request_invoke_id = bacnet_Send_Read_Property_Request(
-				    TARGET_DEVICE,
-				    TARGET_OBJECT_TYPE,
-				    TARGET_OBJECT_INSTANCE,
-				    TARGET_OBJECT_PROPERTY,
-				    TARGET_OBJECT_INDEX);
-	    else if (bacnet_tsm_invoke_id_free(request_invoke_id))
-		/* Transaction is finished */
-		break;
-	    else if (bacnet_tsm_invoke_id_failed(request_invoke_id)) {
-		fprintf(stderr, "Error: TSM Timeout\n");
-		bacnet_tsm_free_invoke_id(request_invoke_id);
-		error = true;
-		break;
-	    }
-	}
+    pthread_create(&read_prop_thread_id, 0, read_prop_thread, NULL);
+    
+    while (1) {
+	if (!found_server) found_server = bacnet_address_bind_request(
+			TARGET_DEVICE, &max_apdu, &target_address);
 
 	pdu_len = bacnet_datalink_receive(
 		    &src, rx_buf, bacnet_MAX_MPDU, BACNET_SELECT_TIMEOUT_MS);
@@ -278,5 +290,5 @@ int main(int argc, char **argv) {
 	ms_tick();
     }
 
-    return error;
+    return 0;
 }
