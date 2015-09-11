@@ -13,8 +13,8 @@ bacnet_client_CFLAGS = $(AM_CFLAGS) $(BACNET_CFLAGS)
 bacnet_client_LDADD = $(AM_LIBS) $(BACNET_LIBS)
 
 bacnet_server_SOURCES = bacnet_server.c
-bacnet_server_CFLAGS = $(AM_CFLAGS) $(BACNET_CFLAGS)
-bacnet_server_LDADD = $(AM_LIBS) $(BACNET_LIBS)
+bacnet_server_CFLAGS = $(AM_CFLAGS) $(BACNET_CFLAGS) $(MODBUS_CFLAGS)
+bacnet_server_LDADD = $(AM_LIBS) $(BACNET_LIBS) $(MODBUS_LIBS)
 
 BUILT_SOURCES = bacnet_namespace.h .bacnet_dependent_src_stamp
 
