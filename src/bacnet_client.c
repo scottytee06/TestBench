@@ -11,6 +11,8 @@
 #include <libbacnet/bactext.h>
 #include "bacnet_namespace.h"
 
+#include "file_ops.h"
+
 #define BACNET_PORT		    0xBAC0
 #define BACNET_INTERFACE	    "lo"
 #define BACNET_DATALINK_TYPE	    "bvlc"
@@ -25,6 +27,7 @@
 #endif
 
 #define MAX_OBJECT_INSTANCES	    4
+#define SERVER_RANDOM_DATA_LENGTH   128
 
 static pthread_mutex_t timer_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -37,6 +40,10 @@ struct server_details {
     uint32_t		array_index;
     BACNET_ADDRESS	bacnet_address;
     int			request_invoke_id[MAX_OBJECT_INSTANCES];
+    /* Retrieve data as integers (actually floats) and convert them to uint16_t
+     * for comparison with modbus data */
+    uint16_t		random_data[MAX_OBJECT_INSTANCES]
+				[SERVER_RANDOM_DATA_LENGTH/2];
 };
 
 static struct server_details servers[] = {
@@ -320,7 +327,7 @@ static void send_rp_request(struct server_details *server,
     }
 }
 
-void *read_prop_thread(void *arg) {
+static void *read_prop_thread(void *arg) {
     int i, j;
     while (1) {
 
@@ -367,6 +374,9 @@ int main(int argc, char **argv) {
     pthread_create(&read_prop_thread_id, 0, read_prop_thread, NULL);
     pthread_create(&minute_tick_id, 0, minute_tick, NULL);
     pthread_create(&second_tick_id, 0, second_tick, NULL);
+
+    file_read_random_data(RANDOM_DATA_POOL);
+    file_print_random_data();
     
     while (1) {
 	pdu_len = bacnet_datalink_receive(
@@ -383,6 +393,8 @@ int main(int argc, char **argv) {
 
 	ms_tick();
     }
+
+    file_free_random_data();
 
     return 0;
 }

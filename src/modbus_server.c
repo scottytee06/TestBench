@@ -5,7 +5,8 @@
 #include <string.h>
 #include <modbus-tcp.h>
 
-#define NUM_REGS 3
+#include "file_ops.h"
+
 #define LISTEN_BACKLOG 1
 
 /* Hack:
@@ -31,10 +32,17 @@ static void *connection(void *arg) {
     modbus_t *ctx = (modbus_t *) arg;
     uint8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
     int bytes;
+    uint16_t device;
 
     while (1) {
 	bytes = modbus_receive(ctx, query);
 	if (bytes > 0) {
+	    /* More hacking: manually extract the modbus query address so that
+	     * we can use it to update the holding registers. The project
+	     * requires that the modus address match the BACnet device no */
+	    device = (query[8] << 8) + query[9];
+	    printf("Request for device %i\n", device);
+	    file_update_regs(mb_mapping->tab_registers, device);
 	    modbus_reply(ctx, query, bytes, mb_mapping);
 	}
 
@@ -46,29 +54,19 @@ static void *connection(void *arg) {
     return arg;
 }
 
-static void *update_regs(void *arg) {
-    while (1) {
-	mb_mapping->tab_registers[0] = rand();
-	mb_mapping->tab_registers[1] = rand();
-	mb_mapping->tab_registers[2] = rand();
-	sleep(1);
-    }
-    return arg;
-}
-
 int main(int argc, char *arg[]) {
     modbus_t *ctx, *dup_ctx;
     int server_fd;
     pthread_t tcp_thread;
-    pthread_t data_thread;
+
+    file_read_random_data(RANDOM_DATA_POOL);
 
     if ((ctx = modbus_new_tcp("SERVER", MODBUS_TCP_DEFAULT_PORT)) == NULL) {
 	printf("Failied to initialise modbus\n");
 	return -1;
     }
 
-    mb_mapping = modbus_mapping_new(0, 0, NUM_REGS, 0);
-    pthread_create(&data_thread, 0, update_regs, NULL);
+    mb_mapping = modbus_mapping_new(0, 0, file_get_highest_channel(), 0);
 
 listen:
     if ((server_fd = modbus_tcp_listen(ctx, LISTEN_BACKLOG)) < 0) {
