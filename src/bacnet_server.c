@@ -25,6 +25,11 @@
 #define BACNET_BBMD_TTL		    90
 #endif
 
+/* If you are trying out the test suite from home, this data matches the data
+ * stored in RANDOM_DATA_POOL for device number 12
+ * BACnet client will print "Successful match" whenever it is able to receive
+ * this set of data. Note that you will not have access to the RANDOM_DATA_POOL
+ * for your final submitted application. */
 static uint16_t test_data[] = {
     0xA4EC, 0x6E39, 0x8740, 0x1065, 0x9134, 0xFC8C };
 #define NUM_TEST_DATA (sizeof(test_data)/sizeof(test_data[0]))
@@ -36,7 +41,18 @@ static int Update_Analog_Input_Read_Property(
 
     static int index;
 
+    /* Update the values to be sent to the BACnet client here.
+     * The data should be read from the tail of a linked list. You are required
+     * to implement this list functionality.
+     *
+     * bacnet_Analog_Input_Present_Value_Set() 
+     *     First argument: Instance No
+     *     Second argument: data to be sent
+     *
+     * Without reconfiguring libbacnet, a maximum of 4 values may be sent */
     bacnet_Analog_Input_Present_Value_Set(0, test_data[index++]);
+    bacnet_Analog_Input_Present_Value_Set(1, test_data[index++]);
+    bacnet_Analog_Input_Present_Value_Set(2, test_data[index++]);
     
     if (index == NUM_TEST_DATA) index = 0;
 
@@ -189,6 +205,18 @@ int main(int argc, char **argv) {
 
     pthread_create(&minute_tick_id, 0, minute_tick, NULL);
     pthread_create(&second_tick_id, 0, second_tick, NULL);
+    
+    /* Start another thread here to retrieve your allocated registers from the
+     * modbus server. This thread should have the following structure (in a
+     * separate function):
+     *
+     * Initialise:
+     *	    Connect to the modbus server
+     *
+     * Loop:
+     *	    Read the required number of registers from the modbus server
+     *	    Store the register data into a linked list 
+     */
 
     while (1) {
 	pdu_len = bacnet_datalink_receive(

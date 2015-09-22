@@ -27,7 +27,7 @@
 #define BACNET_BBMD_TTL		    90
 #endif
 
-#define debug 1
+#define debug 0
 
 static pthread_mutex_t timer_lock = PTHREAD_MUTEX_INITIALIZER;
 static int instance_no;
@@ -350,12 +350,12 @@ static void send_rp_request(device_obj *device, instance_obj *instance) {
 				    instance->object_property,
 				    instance->array_index);
 
-    else if (bacnet_tsm_invoke_id_free(instance->invoke_id)) {
+    else if (bacnet_tsm_invoke_id_free(instance->invoke_id))
 
 	/* Transaction is finished */
 	instance->invoke_id = 0;
 
-    } else if (bacnet_tsm_invoke_id_failed(instance->invoke_id)) {
+    else if (bacnet_tsm_invoke_id_failed(instance->invoke_id)) {
 
 	fprintf(stderr, "Error: TSM Timeout for device %i\n",
 			device->device_id);
