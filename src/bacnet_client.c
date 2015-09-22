@@ -11,6 +11,7 @@
 #include <libbacnet/bactext.h>
 #include "bacnet_namespace.h"
 
+#include "list.h"
 #include "file_ops.h"
 
 #define BACNET_PORT		    0xBAC0
@@ -26,44 +27,41 @@
 #define BACNET_BBMD_TTL		    90
 #endif
 
-#define MAX_OBJECT_INSTANCES	    4
-#define SERVER_RANDOM_DATA_LENGTH   128
+#define debug 1
 
 static pthread_mutex_t timer_lock = PTHREAD_MUTEX_INITIALIZER;
+static int instance_no;
+static LIST_HEAD(devices);
 
-struct server_details {
+typedef struct device_obj_s device_obj;
+struct device_obj_s {
     int			found;
     uint32_t		device_id;
-    BACNET_OBJECT_TYPE	object_type;
-    uint32_t		object_instances;
-    BACNET_PROPERTY_ID	object_property;
-    uint32_t		array_index;
     BACNET_ADDRESS	bacnet_address;
-    int			request_invoke_id[MAX_OBJECT_INSTANCES];
-    /* Retrieve data as integers (actually floats) and convert them to uint16_t
-     * for comparison with modbus data */
-    uint16_t		random_data[MAX_OBJECT_INSTANCES]
-				[SERVER_RANDOM_DATA_LENGTH/2];
+    struct list_head	instances;
+
+    list_entry		devices;
 };
 
-static struct server_details servers[] = {
-    {
-	.found = 0,
-	.device_id = 120,
-	.object_type = bacnet_OBJECT_ANALOG_INPUT,
-	.object_instances = 1,
-	.object_property = bacnet_PROP_PRESENT_VALUE,
-	.array_index = BACNET_ARRAY_ALL
-    }, {
-	.found = 0,
-	.device_id = 121,
-	.object_type = bacnet_OBJECT_ANALOG_INPUT,
-	.object_instances = 3,
-	.object_property = bacnet_PROP_PRESENT_VALUE,
-	.array_index = BACNET_ARRAY_ALL
-    }
+typedef struct instance_obj_s instance_obj;
+struct instance_obj_s {
+    device_obj		*parent;
+
+    int			instance_no;
+    BACNET_OBJECT_TYPE	object_type;
+    BACNET_PROPERTY_ID	object_property;
+    uint32_t		array_index;
+    int			invoke_id;
+
+    /* Retrieve data as integers (actually floats) and convert them to uint16_t
+     * for comparison with modbus data */
+    uint16_t		*needle;
+    uint16_t		*haystack;
+    size_t		num_words;
+    int			match;
+
+    list_entry		instances;
 };
-#define NUM_SERVERS (sizeof(servers)/sizeof(struct server_details))
 
 static bacnet_object_functions_t client_objects[] = {
     {bacnet_OBJECT_DEVICE,
@@ -116,10 +114,10 @@ static void *minute_tick(void *arg) {
 }
 
 static void ping_servers(void) {
-    int i;
-    for (i = 0; i < NUM_SERVERS; i++) {
-	if (!servers[i].found)
-	    bacnet_Send_WhoIs(servers[i].device_id, servers[i].device_id);
+    device_obj *device;
+    list_for_each_entry(device, &devices, devices) {
+	if (!device->found)
+	    bacnet_Send_WhoIs(device->device_id, device->device_id);
     }
 }
 
@@ -165,17 +163,17 @@ static void *second_tick(void *arg) {
 }
 
 static void ack_servers(void) {
-    int i;
+    device_obj *device;
     unsigned max_apdu;
 
-    for (i = 0; i < NUM_SERVERS; i++) {
+    list_for_each_entry(device, &devices, devices) {
 
-	if (!servers[i].found)
-	    servers[i].found =
+	if (!device->found)
+	    device->found =
 		bacnet_address_bind_request(
-		    servers[i].device_id,
+		    device->device_id,
 		    &max_apdu,
-		    &servers[i].bacnet_address);
+		    &device->bacnet_address);
     }
 
 }
@@ -205,21 +203,23 @@ static void ms_tick(void) {
 		    SERVICE_CONFIRMED_##service,	\
 		    handler)
 
-static int match_server(BACNET_ADDRESS *src,
+static device_obj *match_server(BACNET_ADDRESS *src,
 			uint8_t invoke_id,
-			uint32_t *object_instance) {
-    int i, j;
-    for (i = 0; i < NUM_SERVERS; i++) {
-	if (bacnet_address_match(&servers[i].bacnet_address, src)) {
-	    for (j = 0; j < MAX_OBJECT_INSTANCES; j++) {
-		if (servers[i].request_invoke_id[j] == invoke_id) {
-		    *object_instance = j;
-		    return i;
+			instance_obj **instance_out) {
+    device_obj *device;
+    instance_obj *instance;
+    list_for_each_entry(device, &devices, devices) {
+	if (bacnet_address_match(&device->bacnet_address, src)) {
+	    list_for_each_entry(instance, &device->instances, instances) {
+		if (instance->invoke_id == invoke_id) {
+		    if (instance_out)
+			*instance_out = instance;
+		    return device;
 		}
 	    }
 	}
     }
-    return -1;
+    return NULL;
 }
 
 static void abort_handler(
@@ -228,15 +228,14 @@ static void abort_handler(
 		uint8_t abort_reason,
 		bool server) {
 
-    int index;
-    uint32_t object_instance;
+    device_obj *device;
     
-    if ((index = match_server(src, invoke_id, &object_instance)) < 0) return;
+    if (!(device = match_server(src, invoke_id, NULL))) return;
 
     fprintf(stderr, "BACnet Abort from server %i: %s\n",
-	    servers[index].device_id,
+	    device->device_id,
 	    bactext_abort_reason_name(abort_reason));
-    servers[index].found = 0;
+    device->found = 0;
 }
 
 static void reject_handler(
@@ -244,15 +243,14 @@ static void reject_handler(
 		uint8_t invoke_id,
 		uint8_t reject_reason) {
 
-    int index;
-    uint32_t object_instance;
+    device_obj *device;
     
-    if ((index = match_server(src, invoke_id, &object_instance)) < 0) return;
+    if (!(device = match_server(src, invoke_id, NULL))) return;
 
     fprintf(stderr, "BACnet Reject from server %i: %s\n",
-	    servers[index].device_id,
+	    device->device_id,
 	    bactext_reject_reason_name(reject_reason));
-    servers[index].found = 0;
+    device->found = 0;
 }
 
 static void read_property_err(
@@ -261,16 +259,49 @@ static void read_property_err(
 		BACNET_ERROR_CLASS error_class,
 		BACNET_ERROR_CODE error_code) {
 
-    int index;
-    uint32_t object_instance;
+    device_obj *device;
     
-    if ((index = match_server(src, invoke_id, &object_instance)) < 0) return;
+    if (!(device = match_server(src, invoke_id, NULL))) return;
 
     fprintf(stderr, "BACnet Error from server %i: %s: %s\n",
-	    servers[index].device_id,
+	    device->device_id,
 	    bactext_error_class_name(error_class),
 	    bactext_error_code_name(error_code));
-    servers[index].found = 0;
+    device->found = 0;
+}
+
+static void array_tail(uint16_t data, instance_obj *instance) {
+    int i;
+
+    /* Shift the array */
+    for (i = 0; i < instance->num_words - 1; i++) {
+	instance->haystack[i] = instance->haystack[i+1];
+    }
+
+    /* Place new data in the last entry of the array */
+    instance->haystack[instance->num_words - 1] = data;
+
+#if debug
+    for (i = 0; i < instance->num_words; i++) {
+	printf("%04X ", instance->haystack[i]);
+	if ((i % 8) == 7) printf("\n");
+    }
+    printf("\n");
+
+    for (i = 0; i < instance->num_words; i++) {
+	printf("%04X ", instance->needle[i]);
+	if ((i % 8) == 7) printf("\n");
+    }
+    printf("\n");
+#endif
+
+    if (!memcmp(instance->needle, 
+		instance->haystack,
+		instance->num_words * sizeof(uint16_t))) {
+	instance->match = 1;
+	printf("Successful match for device %i, instance %i\n",
+			instance->parent->device_id, instance->instance_no);
+    }
 }
 
 static void read_property_ack(
@@ -278,71 +309,134 @@ static void read_property_ack(
 		uint16_t service_len,
 		BACNET_ADDRESS *src,
 		BACNET_CONFIRMED_SERVICE_ACK_DATA *service_data) {
-    int len, index;
+    int len;
+    device_obj *device;
+    instance_obj *instance;
     BACNET_READ_PROPERTY_DATA data;
-    uint32_t object_instance;
+    BACNET_APPLICATION_DATA_VALUE value;
+    uint16_t data_16;
     
-    if ((index = match_server(src,
-		    service_data->invoke_id, &object_instance)) < 0) return;
+    if (!(device = match_server(src,
+		    service_data->invoke_id, &instance))) return;
 
     len = bacnet_rp_ack_decode_service_request(
 			service_request, service_len, &data);
     if (len < 0) {
 	fprintf(stderr, "Read Property ACK service request decode failed\n");
     } else {
-	fprintf(stderr, "Data received from server %i, instance %i: ", 
-	    servers[index].device_id, object_instance);
-	bacnet_rp_ack_print_data(&data);
+	bacapp_decode_application_data(
+			data.application_data,
+			data.application_data_len,
+			&value);
+	data_16 = value.type.Real;
+
+	array_tail(data_16, instance);
+#if debug
+	fprintf(stderr, "%04X from server %i, instance %i\n", data_16,
+	    device->device_id, instance->instance_no);
+#endif
     }
 }
 
-static void send_rp_request(struct server_details *server, 
-			    uint32_t object_instance) {
-    if (!server->found) return;
+static void send_rp_request(device_obj *device, instance_obj *instance) {
+    if (!device->found) return;
 
-    if (!server->request_invoke_id[object_instance])
-	server->request_invoke_id[object_instance] = 
+    if (!instance->invoke_id)
+	instance->invoke_id = 
 		bacnet_Send_Read_Property_Request(
-				    server->device_id,
-				    server->object_type,
-				    object_instance,
-				    server->object_property,
-				    server->array_index);
+				    device->device_id,
+				    instance->object_type,
+				    instance->instance_no,
+				    instance->object_property,
+				    instance->array_index);
 
-    else if (bacnet_tsm_invoke_id_free(
-			    server->request_invoke_id[object_instance])) {
+    else if (bacnet_tsm_invoke_id_free(instance->invoke_id)) {
 
 	/* Transaction is finished */
-	server->request_invoke_id[object_instance] = 0;
+	instance->invoke_id = 0;
 
-    } else if (bacnet_tsm_invoke_id_failed(
-			    server->request_invoke_id[object_instance])) {
+    } else if (bacnet_tsm_invoke_id_failed(instance->invoke_id)) {
 
 	fprintf(stderr, "Error: TSM Timeout for device %i\n",
-			server->device_id);
+			device->device_id);
 
-	bacnet_tsm_free_invoke_id(server->request_invoke_id[object_instance]);
-	server->request_invoke_id[object_instance] = 0;
-	server->found = 0;
+	bacnet_tsm_free_invoke_id(instance->invoke_id);
+	instance->invoke_id = 0;
+	device->found = 0;
     }
 }
 
 static void *read_prop_thread(void *arg) {
-    int i, j;
+    device_obj *device;
+    instance_obj *instance;
     while (1) {
 
 	usleep(100000);
 
 	pthread_mutex_lock(&timer_lock);
 
-	for (i = 0; i < NUM_SERVERS; i++)
-	    for (j = 0; j < servers[i].object_instances; j++)
-		send_rp_request(&servers[i], j);
+	list_for_each_entry(device, &devices, devices)
+	    list_for_each_entry(instance, &device->instances, instances)
+		send_rp_request(device, instance);
 	    
 	pthread_mutex_unlock(&timer_lock);
     }
 
     return arg;
+}
+
+void add_instance(size_t num_words, uint16_t *data, void *arg) {
+    int bytes;
+    instance_obj *instance;
+    device_obj *device = (device_obj *) arg;
+
+    instance = malloc(sizeof(instance_obj));
+    memset(instance, 0, sizeof(instance_obj));
+
+    instance->parent = device;
+    instance->object_type = bacnet_OBJECT_ANALOG_INPUT;
+    instance->object_property = bacnet_PROP_PRESENT_VALUE;
+    instance->array_index = BACNET_ARRAY_ALL;
+
+    bytes = num_words * sizeof(uint16_t);
+    instance->num_words = num_words;
+    instance->instance_no = instance_no++;
+
+    instance->needle = malloc(bytes);
+    instance->haystack = malloc(bytes);
+    memcpy(instance->needle, data, num_words * sizeof(uint16_t));
+
+    list_add_tail(&instance->instances, &device->instances);
+}
+
+void add_device(int device_id) {
+    device_obj *device;
+
+    device = malloc(sizeof(device_obj));
+    memset(device, 0, sizeof(device_obj));
+
+    device->device_id = device_id;
+    INIT_LIST_HEAD(&device->instances);
+    instance_no = 0;
+
+    list_add_tail(&device->devices, &devices);
+
+    file_channel_enumerate(add_instance, device);
+}
+
+void free_devices(void) {
+    device_obj *device;
+    instance_obj *instance;
+
+    list_for_each_entry(device, &devices, devices) {
+	list_for_each_entry(instance, &device->instances, instances) {
+	    free(instance->needle);
+	    free(instance->haystack);
+	    free(instance);
+	}
+	free(device);
+    }
+    INIT_LIST_HEAD(&devices);
 }
 
 int main(int argc, char **argv) {
@@ -376,8 +470,9 @@ int main(int argc, char **argv) {
     pthread_create(&second_tick_id, 0, second_tick, NULL);
 
     file_read_random_data(RANDOM_DATA_POOL);
-    file_print_random_data();
-    
+    file_device_enumerate(add_device);
+    file_free_random_data();
+
     while (1) {
 	pdu_len = bacnet_datalink_receive(
 		    &src, rx_buf, bacnet_MAX_MPDU, BACNET_SELECT_TIMEOUT_MS);
@@ -394,7 +489,7 @@ int main(int argc, char **argv) {
 	ms_tick();
     }
 
-    file_free_random_data();
+    free_devices();
 
     return 0;
 }

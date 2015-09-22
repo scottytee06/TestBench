@@ -11,7 +11,7 @@
 #include <libbacnet/ai.h>
 #include "bacnet_namespace.h"
 
-#define BACNET_INSTANCE_NO	    120
+#define BACNET_INSTANCE_NO	    12
 #define BACNET_PORT		    0xBAC1
 #define BACNET_INTERFACE	    "lo"
 #define BACNET_DATALINK_TYPE	    "bvlc"
@@ -25,7 +25,23 @@
 #define BACNET_BBMD_TTL		    90
 #endif
 
+static uint16_t test_data[] = {
+    0xA4EC, 0x6E39, 0x8740, 0x1065, 0x9134, 0xFC8C };
+#define NUM_TEST_DATA (sizeof(test_data)/sizeof(test_data[0]))
+
 static pthread_mutex_t timer_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int Update_Analog_Input_Read_Property(
+		BACNET_READ_PROPERTY_DATA *rpdata) {
+
+    static int index;
+
+    bacnet_Analog_Input_Present_Value_Set(0, test_data[index++]);
+    
+    if (index == NUM_TEST_DATA) index = 0;
+
+    return bacnet_Analog_Input_Read_Property(rpdata);
+}
 
 static bacnet_object_functions_t server_objects[] = {
     {bacnet_OBJECT_DEVICE,
@@ -50,7 +66,7 @@ static bacnet_object_functions_t server_objects[] = {
             bacnet_Analog_Input_Index_To_Instance,
             bacnet_Analog_Input_Valid_Instance,
             bacnet_Analog_Input_Object_Name,
-            bacnet_Analog_Input_Read_Property,
+            Update_Analog_Input_Read_Property,
             bacnet_Analog_Input_Write_Property,
             bacnet_Analog_Input_Property_Lists,
             NULL /* ReadRangeInfo */ ,
@@ -170,8 +186,6 @@ int main(int argc, char **argv) {
     register_with_bbmd();
 
     bacnet_Send_I_Am(bacnet_Handler_Transmit_Buffer);
-
-    bacnet_Analog_Input_Present_Value_Set(0, 1.26);
 
     pthread_create(&minute_tick_id, 0, minute_tick, NULL);
     pthread_create(&second_tick_id, 0, second_tick, NULL);

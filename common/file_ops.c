@@ -10,6 +10,8 @@
 
 static LIST_HEAD(devices);
 
+static int num_devices;
+
 typedef struct random_channel_data_s random_channel_obj;
 struct random_channel_data_s {
     size_t num_words;
@@ -28,6 +30,8 @@ struct random_device_data_s {
 
     list_entry devices;
 };
+
+static random_device_obj *enum_device;
 
 static int file_filter(const struct dirent *entry) {
     if (!strcmp(entry->d_name, "..")) return 0;
@@ -91,6 +95,7 @@ static void add_device_data(const char *location, random_device_obj *device) {
 
 	channel->num_words = file_size / 2;
 	channel->index = 0;
+	num_devices++;
 
 	fclose(fp);
 	free(data_filename);
@@ -187,6 +192,10 @@ void file_update_regs(uint16_t *regs, int device_id) {
     }
 }
 
+int file_num_devices(void) {
+    return num_devices;
+}
+
 int file_get_highest_channel(void) {
     int highest = 0;
 
@@ -223,6 +232,25 @@ void file_print_random_data(void) {
     }
 }
 
+void file_device_enumerate(void (*add_device_func)(int device_id)) {
+    list_for_each_entry(enum_device, &devices, devices) {
+	add_device_func(enum_device->device_id);
+    }
+    enum_device = NULL;
+}
+
+void file_channel_enumerate(
+	void (*add_channel_func)(size_t num_words, uint16_t *data, void *arg),
+	void *arg) {
+    random_channel_obj *channel;
+
+    if (!enum_device) return;
+
+    list_for_each_entry(channel, &enum_device->channels, channels) {
+	add_channel_func(channel->num_words, channel->data, arg);
+    }
+}
+
 void file_free_random_data(void) {
     random_device_obj *device;
     random_channel_obj *channel;
@@ -235,4 +263,5 @@ void file_free_random_data(void) {
     }
 
     INIT_LIST_HEAD(&devices);
+    num_devices = 0;
 }
