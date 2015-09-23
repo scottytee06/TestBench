@@ -49,7 +49,7 @@ static int file_sorter(const struct dirent **a, const struct dirent **b) {
 }
 
 static void add_device_data(const char *location, random_device_obj *device) {
-    int n_members, i;
+    int n_members, i, j;
     struct dirent **dir_contents;
     random_channel_obj *channel;
     char *data_filename;
@@ -96,6 +96,15 @@ static void add_device_data(const char *location, random_device_obj *device) {
 	channel->num_words = file_size / 2;
 	channel->index = 0;
 	num_devices++;
+
+	/* Check for duplicates, so we can discard them when the server's link
+	 * list is empty */
+	for (j = 1; j < channel->num_words; j++) {
+	    if (channel->data[j] == channel->data[j - 1]) {
+		fprintf(stderr, "Duplicate data found for %s\n", data_filename);
+		exit(1);
+	    }
+	}
 
 	fclose(fp);
 	free(data_filename);

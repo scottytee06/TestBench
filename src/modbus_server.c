@@ -71,6 +71,9 @@ int main(int argc, char *arg[]) {
 listen:
     if ((server_fd = modbus_tcp_listen(ctx, LISTEN_BACKLOG)) < 0) {
 	printf("Failed to initiate modbus_tcp server, %i\n", server_fd);
+	printf("Root permissions are needed to open ports below 1024\n");
+	printf("Currently configured to open port %i\n",
+			MODBUS_TCP_DEFAULT_PORT);
 	modbus_free(ctx);
 	return -1;
     }
