@@ -59,6 +59,7 @@ struct instance_obj_s {
     uint16_t		*haystack;
     size_t		num_words;
     int			match;
+    uint16_t		last_value;
 
     list_entry		instances;
 };
@@ -272,6 +273,11 @@ static void read_property_err(
 
 static void array_tail(uint16_t data, instance_obj *instance) {
     int i;
+
+    /* If we are making requests too often, it is possible to get ahead of the
+     * bacnet_server. If so, just drop the data */
+    if (data == instance->last_value) return;
+    instance->last_value = data;
 
     /* Shift the array */
     for (i = 0; i < instance->num_words - 1; i++) {
