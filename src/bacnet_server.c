@@ -40,9 +40,14 @@ static int Update_Analog_Input_Read_Property(
 		BACNET_READ_PROPERTY_DATA *rpdata) {
 
     static int index;
+    int instance_no = bacnet_Analog_Input_Instance_To_Index(
+			rpdata->object_instance);
 
+    if (rpdata->object_property != bacnet_PROP_PRESENT_VALUE) goto not_pv;
+
+    printf("AI_Present_Value request for instance %i\n", instance_no);
     /* Update the values to be sent to the BACnet client here.
-     * The data should be read from the tail of a linked list. You are required
+     * The data should be read from the head of a linked list. You are required
      * to implement this list functionality.
      *
      * bacnet_Analog_Input_Present_Value_Set() 
@@ -56,6 +61,7 @@ static int Update_Analog_Input_Read_Property(
     
     if (index == NUM_TEST_DATA) index = 0;
 
+not_pv:
     return bacnet_Analog_Input_Read_Property(rpdata);
 }
 
@@ -215,7 +221,7 @@ int main(int argc, char **argv) {
      *
      * Loop:
      *	    Read the required number of registers from the modbus server
-     *	    Store the register data into a linked list 
+     *	    Store the register data into the tail of a linked list 
      */
 
     while (1) {
