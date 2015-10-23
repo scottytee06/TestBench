@@ -267,8 +267,8 @@ static void add_to_list(char *word) {
 }
 
 
-/* ADD ME Retrieve the first object in the linked list. Note that this function must
- *  * be called with list_lock held */
+//ADD ME Retrieve the first object in the linked list. Note that this function must
+   // be called with list_lock held */
 
 static word_object *list_get_first(void) {
     word_object *first_object;
@@ -279,14 +279,49 @@ static word_object *list_get_first(void) {
 	return first_object;
 }
 
+int modbus(void) {
+	int i;
+	int rc;
+	uint16_t tab_reg[128];
+	char sending [64];
+	modbus_t *ctx;
 
+	// Kim server is at 140.159.153.159
+	
+	ctx = modbus_new_tcp("140.159.153.159", 502);
 
+	// testing on another server if kim's is down
+	//ctx = modbus_new_tcp("140.159.119.87", 502);
+	
+	if (ctx == NULL) {
+	fprintf(stderr, "Unable to find libmodbus context\n");
+	return -1;
+	}
 
+	if (modbus_connect(ctx) == -1) {
+	printf("The connection failed!");
+	fprintf(stderr, "Connection failed: %s\n", modbus_strerror(errno));
+	modbus_free(ctx);
+	return -1;
+   	}
 
+	rc = modbus_read_registers(ctx, 12, 1, tab_reg);
+	if (rc == -1) {
+	fprintf(stderr, "%s\n", modbus_strerror(errno));
+	return -1;
+ 	} 	
 
+	for (i=0; i < rc; i++) {
+	sprintf(sending,"reg[%d]=%d (0x%X)", i, tab_reg[i], tab_reg[i]);
+	add_to_list(sending);
+	//printf("reg[%d]=%d (0x%X)\n", i, tab_reg[i], tab_reg[i]);
+	}
 
-
-
+	modbus_close(ctx); 
+	modbus_free(ctx);
+	sleep(1) ;
+	return 0;
+}
 
 
 
