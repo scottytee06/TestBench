@@ -29,7 +29,7 @@
 // FROM MODBUS PROGRAM ^^^
 
 
-
+// CHANGE 12 
 
 #define BACNET_INSTANCE_NO	    12
 #define BACNET_PORT		    0xBAC1
@@ -56,6 +56,14 @@ static uint16_t test_data[] = {
 
 static pthread_mutex_t timer_lock = PTHREAD_MUTEX_INITIALIZER;
 
+
+// array of linked lists (week 11)
+
+// =================================================================
+//------------------------BACNET------------------------------------
+//===================================================================
+
+
 static int Update_Analog_Input_Read_Property(
 		BACNET_READ_PROPERTY_DATA *rpdata) {
 
@@ -66,6 +74,9 @@ static int Update_Analog_Input_Read_Property(
     if (rpdata->object_property != bacnet_PROP_PRESENT_VALUE) goto not_pv;
 
     printf("AI_Present_Value request for instance %i\n", instance_no);
+
+
+
     /* Update the values to be sent to the BACnet client here.
      * The data should be read from the head of a linked list. You are required
      * to implement this list functionality.
@@ -75,6 +86,19 @@ static int Update_Analog_Input_Read_Property(
      *     Second argument: data to be sent
      *
      * Without reconfiguring libbacnet, a maximum of 4 values may be sent */
+    // --------------------  EDIT HERE ====================================
+    //
+    //
+
+
+
+	
+
+
+
+
+
+
     bacnet_Analog_Input_Present_Value_Set(0, test_data[index++]);
     /* bacnet_Analog_Input_Present_Value_Set(1, test_data[index++]); */
     /* bacnet_Analog_Input_Present_Value_Set(2, test_data[index++]); */
@@ -211,7 +235,7 @@ static void ms_tick(void) {
 //----------------ADD MODBUS PROGRAM HERE--------------------------
 //======================================================================
 
-
+// Added, link lists and headers plus modbus below
 
 
  // LINKED LIST FOR OBJECT
@@ -248,9 +272,9 @@ static void add_to_list(char *word) {
 
      if (list_head == NULL) {
      /* The list is empty, just place our tmp_object at the head */
-     list_head = tmp_object;
-     }
-     else
+     list_head = tmp_object;}
+     
+     else{
      /*Iterate through the linked list to find the last object */
      last_object = list_head;
 
@@ -261,6 +285,7 @@ static void add_to_list(char *word) {
 	/* Last object is now found, link in our tmp_object at the tail */
 	last_object->next = tmp_object;
 
+         }
 
     pthread_mutex_unlock(&list_lock);
     pthread_cond_signal(&list_data_ready);
@@ -279,7 +304,7 @@ static word_object *list_get_first(void) {
 	return first_object;
 }
 
-int modbus(void) {
+static void *modbus(void *arg) {
 	int i;
 	int rc;
 	uint16_t tab_reg[128];
@@ -288,27 +313,31 @@ int modbus(void) {
 
 	// Kim server is at 140.159.153.159
 	
-	ctx = modbus_new_tcp("140.159.153.159", 502);
-
+	
+	//ctx = modbus_new_tcp("140.159.153.159", 502);
 	// testing on another server if kim's is down
 	//ctx = modbus_new_tcp("140.159.119.87", 502);
 	
+	ctx = modbus_new_tcp("127.0.0.1", 502);
+	
 	if (ctx == NULL) {
 	fprintf(stderr, "Unable to find libmodbus context\n");
-	return -1;
+	return NULL;
 	}
 
 	if (modbus_connect(ctx) == -1) {
 	printf("The connection failed!");
 	fprintf(stderr, "Connection failed: %s\n", modbus_strerror(errno));
 	modbus_free(ctx);
-	return -1;
+	return NULL;
    	}
 
+	// DEVICE ID = 12 - NUMBER OF REGISTERS = 1 - Subject to change
+	while(1) {
 	rc = modbus_read_registers(ctx, 12, 1, tab_reg);
 	if (rc == -1) {
 	fprintf(stderr, "%s\n", modbus_strerror(errno));
-	return -1;
+	return NULL;
  	} 	
 
 	for (i=0; i < rc; i++) {
@@ -316,11 +345,14 @@ int modbus(void) {
 	add_to_list(sending);
 	//printf("reg[%d]=%d (0x%X)\n", i, tab_reg[i], tab_reg[i]);
 	}
+	
+	usleep (100000);
 
+	}
 	modbus_close(ctx); 
 	modbus_free(ctx);
 	sleep(1) ;
-	return 0;
+	return NULL;
 }
 
 
@@ -336,7 +368,9 @@ int main(int argc, char **argv) {
     uint8_t rx_buf[bacnet_MAX_MPDU];
     uint16_t pdu_len;
     BACNET_ADDRESS src;
-    pthread_t minute_tick_id, second_tick_id;
+    pthread_t minute_tick_id, second_tick_id, modbus_new_thread_id;
+
+    // added the modbus thread above
 
     bacnet_Device_Set_Object_Instance_Number(BACNET_INSTANCE_NO);
     bacnet_address_init();
@@ -356,6 +390,12 @@ int main(int argc, char **argv) {
     register_with_bbmd();
 
     bacnet_Send_I_Am(bacnet_Handler_Transmit_Buffer);
+    
+
+    // ======================
+    // Add a new thread
+    // =======================
+    
 
     pthread_create(&minute_tick_id, 0, minute_tick, NULL);
     pthread_create(&second_tick_id, 0, second_tick, NULL);
@@ -371,6 +411,21 @@ int main(int argc, char **argv) {
      *	    Read the required number of registers from the modbus server
      *	    Store the register data into the tail of a linked list 
      */
+
+    // =================== EDIT HERE =================== 
+    //
+    //
+
+     pthread_create(&modbus_new_thread_id, 0, modbus, NULL);
+
+
+
+
+
+
+
+
+
 
     while (1) {
 	pdu_len = bacnet_datalink_receive(
