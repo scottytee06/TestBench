@@ -1,5 +1,28 @@
 Victoria University EES4100 Test Suite
 
+
+
+This application was developed in a University class for educational purposes only.
+
+This application called "testbench" was provided by our lecture Kim Taylor. 
+
+Can be found at: https://github.com/kmtaylor/EES4100_Testbench
+
+To install, please read INSTALL.
+
+Standard install:
+ $ ./configure
+ $ make
+
+
+Modifications done by Scott Thomas
+
+GitHub: https://github.com/scottytee06/TestBench.git
+
+
+
+
+
 This repository builds three applications:
 
 bacnet_client:
