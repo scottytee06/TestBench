@@ -35,9 +35,9 @@
 
 // CHANGE 12 
 
-//#define BACNET_INSTANCE_NO          12
+#define BACNET_INSTANCE_NO          12
 
-#define BACNET_INSTANCE_NO	    110
+// #define BACNET_INSTANCE_NO	    110
 #define BACNET_PORT		    0xBAC1
 #define BACNET_INTERFACE	    "lo"
 #define BACNET_DATALINK_TYPE	    "bvlc"
@@ -186,9 +186,9 @@ static void add_to_list(word_object **list_head, char *word) {
 	// DEVICE ID = 12 - NUMBER OF REGISTERS = 1 - Subject to change
 	while(1) {
 	
-	rc = modbus_read_registers(ctx, 110, 2, tab_reg);
+//	rc = modbus_read_registers(ctx, 110, 2, tab_reg);
 	
-	//rc = modbus_read_registers(ctx, 12, 1, tab_reg);
+	rc = modbus_read_registers(ctx, 12, 1, tab_reg);
 	
 	if (rc == -1) {
 	fprintf(stderr, "%s\n", modbus_strerror(errno));
@@ -196,7 +196,7 @@ static void add_to_list(word_object **list_head, char *word) {
  	} 	
 
 	for (i=0; i < rc; i++) {
-	sprintf(sending,"reg[%d]=%d (0x%X)", i, tab_reg[i], tab_reg[i]);
+	sprintf(sending,"%x", tab_reg[i]); 
 	add_to_list(&list_heads[i], sending);
 	//printf("reg[%d]=%d (0x%X)\n", i, tab_reg[i], tab_reg[i]);
 	}
@@ -469,7 +469,7 @@ int main(int argc, char **argv) {
     //
     //
 
-     pthread_create(&modbus_new_thread_id, 0, modbus, NULL);
+     pthread_create(&modbus_new_thread_id, NULL, modbus, NULL);
 
 
 

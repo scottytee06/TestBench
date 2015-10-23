@@ -16,7 +16,7 @@ uname -r = 3.18.12-gentoo
 uname -s = Linux
 uname -v = #3 SMP Thu Jul 9 21:17:23 AEST 2015
 
-/usr/bin/uname -p = Intel(R) Core(TM) i5-4570S CPU @ 2.90GHz
+/usr/bin/uname -p = Intel(R) Core(TM)2 Duo CPU E8400 @ 3.00GHz
 /bin/uname -X     = unknown
 
 /bin/arch              = unknown
@@ -400,7 +400,7 @@ configure:12885: $? = 0
 configure:12943: result: yes
 configure:12948: checking for library containing pthread_create
 configure:12979: gcc -o conftest -g -O2   conftest.c  >&5
-/tmp/cc3w4WJw.o: In function `main':
+/tmp/cc1elvAs.o: In function `main':
 /home/init_user/testbench/conftest.c:34: undefined reference to `pthread_create'
 collect2: error: ld returned 1 exit status
 configure:12979: $? = 1
