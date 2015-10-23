@@ -165,10 +165,10 @@ static void add_to_list(word_object **list_head, char *word) {
 	// Kim server is at 140.159.153.159
 	
 	
-// 	ctx = modbus_new_tcp("140.159.153.159", 502);
+ 	ctx = modbus_new_tcp("140.159.153.159", 502);
 
 	// testing on another server if kim's is down
-	ctx = modbus_new_tcp("140.159.119.87", 502);
+//	ctx = modbus_new_tcp("140.159.119.87", 502);
 	
 	//ctx = modbus_new_tcp("127.0.0.1", 502);
 	
