@@ -11,6 +11,26 @@
 #include <libbacnet/ai.h>
 #include "bacnet_namespace.h"
 
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <errno.h>
+#include <modbus.h>
+#include <unistd.h>
+
+#define SERVER_ADDR "140.159.153.159" // ip address
+#define SERVER_PORT 502
+#define DATA_LENGTH 256
+
+// FROM MODBUS PROGRAM ^^^
+
+
+
+
 #define BACNET_INSTANCE_NO	    12
 #define BACNET_PORT		    0xBAC1
 #define BACNET_INTERFACE	    "lo"
@@ -183,6 +203,99 @@ static void ms_tick(void) {
     bacnet_apdu_set_confirmed_handler(			\
 		    SERVICE_CONFIRMED_##service,	\
 		    bacnet_handler_##handler)
+
+
+
+
+//-=====================================================================
+//----------------ADD MODBUS PROGRAM HERE--------------------------
+//======================================================================
+
+
+
+
+ // LINKED LIST FOR OBJECT
+typedef struct s_word_object word_object;
+struct s_word_object {
+    char *word;
+        word_object *next;
+	};
+
+
+// /* NEED list_head: Shared between two threads, must be accessed with list_lock */
+static word_object *list_head;
+static pthread_mutex_t list_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t list_data_ready = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t list_data_flush = PTHREAD_COND_INITIALIZER;
+
+
+
+/* NEED Add object to list */
+static void add_to_list(char *word) {
+    word_object *last_object, *tmp_object;
+        char *tmp_string;
+
+/* Do all memory allocation outside of locking - strdup() and malloc() can block */
+    tmp_object = malloc(sizeof(word_object));
+    tmp_string = strdup(word);
+
+
+/* Set up tmp_object outside of locking */
+    tmp_object->word = tmp_string;
+    tmp_object->next = NULL;
+
+    pthread_mutex_lock(&list_lock);
+
+     if (list_head == NULL) {
+     /* The list is empty, just place our tmp_object at the head */
+     list_head = tmp_object;
+     }
+     else
+     /*Iterate through the linked list to find the last object */
+     last_object = list_head;
+
+     while (last_object->next) {
+     	    last_object = last_object->next;
+	    }
+
+	/* Last object is now found, link in our tmp_object at the tail */
+	last_object->next = tmp_object;
+
+
+    pthread_mutex_unlock(&list_lock);
+    pthread_cond_signal(&list_data_ready);
+}
+
+
+/* ADD ME Retrieve the first object in the linked list. Note that this function must
+ *  * be called with list_lock held */
+
+static word_object *list_get_first(void) {
+    word_object *first_object;
+
+        first_object = list_head;
+	list_head = list_head->next;
+
+	return first_object;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+//==================================================================
+//------------ FINISH MODBUS HERE--------------------------------
+//===================================================================
+
+
+
 
 int main(int argc, char **argv) {
     uint8_t rx_buf[bacnet_MAX_MPDU];
