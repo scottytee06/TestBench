@@ -35,7 +35,9 @@
 
 // CHANGE 12 
 
-#define BACNET_INSTANCE_NO	    12
+//#define BACNET_INSTANCE_NO          12
+
+#define BACNET_INSTANCE_NO	    110
 #define BACNET_PORT		    0xBAC1
 #define BACNET_INTERFACE	    "lo"
 #define BACNET_DATALINK_TYPE	    "bvlc"
@@ -45,7 +47,7 @@
 
 #if RUN_AS_BBMD_CLIENT
 #define BACNET_BBMD_PORT	    0xBAC0
-#define BACNET_BBMD_ADDRESS	    "127.0.0.1"
+#define BACNET_BBMD_ADDRESS	    "140.159.160.7"
 #define BACNET_BBMD_TTL		    90
 #endif
 
@@ -150,7 +152,7 @@ static void add_to_list(word_object **list_head, char *word) {
 //======================================================================
 
 
-static void *modbus(void *arg) {
+	static void *modbus(void *arg) {
 	int i;
 	int rc;
 	uint16_t tab_reg[128];
@@ -160,7 +162,8 @@ static void *modbus(void *arg) {
 	// Kim server is at 140.159.153.159
 	
 	
- //	ctx = modbus_new_tcp("140.159.153.159", 502);
+// 	ctx = modbus_new_tcp("140.159.153.159", 502);
+
 	// testing on another server if kim's is down
 	//ctx = modbus_new_tcp("140.159.119.87", 502);
 	
@@ -177,10 +180,16 @@ static void *modbus(void *arg) {
 	modbus_free(ctx);
 	return NULL;
    	}
-
+	 
+	// You can have device no 110 with two analogue instances.
+	//
 	// DEVICE ID = 12 - NUMBER OF REGISTERS = 1 - Subject to change
 	while(1) {
-	rc = modbus_read_registers(ctx, 12, 1, tab_reg);
+	
+	rc = modbus_read_registers(ctx, 110, 2, tab_reg);
+	
+	//rc = modbus_read_registers(ctx, 12, 1, tab_reg);
+	
 	if (rc == -1) {
 	fprintf(stderr, "%s\n", modbus_strerror(errno));
 	return NULL;
