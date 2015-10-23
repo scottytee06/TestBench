@@ -35,9 +35,9 @@
 
 // CHANGE 12 
 
-#define BACNET_INSTANCE_NO          12
+//#define BACNET_INSTANCE_NO          12
 
-// #define BACNET_INSTANCE_NO	    110
+ #define BACNET_INSTANCE_NO	    110
 #define BACNET_PORT		    0xBAC1
 #define BACNET_INTERFACE	    "lo"
 #define BACNET_DATALINK_TYPE	    "bvlc"
@@ -47,7 +47,10 @@
 
 #if RUN_AS_BBMD_CLIENT
 #define BACNET_BBMD_PORT	    0xBAC0
-#define BACNET_BBMD_ADDRESS	    "140.159.160.7"
+
+//#define BACNET_BBMD_ADDRESS         "127.0.0.7"
+
+#define BACNET_BBMD_ADDRESS	    "127.159.160.7"
 #define BACNET_BBMD_TTL		    90
 #endif
 
@@ -165,9 +168,9 @@ static void add_to_list(word_object **list_head, char *word) {
 // 	ctx = modbus_new_tcp("140.159.153.159", 502);
 
 	// testing on another server if kim's is down
-	//ctx = modbus_new_tcp("140.159.119.87", 502);
+	ctx = modbus_new_tcp("140.159.119.87", 502);
 	
-	ctx = modbus_new_tcp("127.0.0.1", 502);
+	//ctx = modbus_new_tcp("127.0.0.1", 502);
 	
 	if (ctx == NULL) {
 	fprintf(stderr, "Unable to find libmodbus context\n");
@@ -186,9 +189,9 @@ static void add_to_list(word_object **list_head, char *word) {
 	// DEVICE ID = 12 - NUMBER OF REGISTERS = 1 - Subject to change
 	while(1) {
 	
-//	rc = modbus_read_registers(ctx, 110, 2, tab_reg);
+	rc = modbus_read_registers(ctx, 110, 2, tab_reg);
 	
-	rc = modbus_read_registers(ctx, 12, 1, tab_reg);
+//	rc = modbus_read_registers(ctx, 12, 1, tab_reg);
 	
 	if (rc == -1) {
 	fprintf(stderr, "%s\n", modbus_strerror(errno));
@@ -285,7 +288,8 @@ static int Update_Analog_Input_Read_Property(
 
    printf("AI_Present_Value request for instance %i\n", instance_no);
 
-    bacnet_Analog_Input_Present_Value_Set(0, stack[instance_no]);  // bacnet client gets data 
+    bacnet_Analog_Input_Present_Value_Set(instance_no, stack[instance_no]); 
+    // bacnet client gets data and sends 
     /* bacnet_Analog_Input_Present_Value_Set(1, test_data[index++]); */
     /* bacnet_Analog_Input_Present_Value_Set(2, test_data[index++]); */
     
